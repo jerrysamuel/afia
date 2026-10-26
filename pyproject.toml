@@ -1,0 +1,22 @@
+[project]
+name = "afia"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "alembic>=1.16.5",
+    "sqlmodel>=0.0.47",
+    "openai>=2.0.0",
+    "pgvector>=0.4.1",
+    "python-dotenv>=1.2.0",
+    "psycopg[binary]>=3.2.0",
+    "x402[evm,httpx]>=2.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
