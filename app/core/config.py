@@ -16,16 +16,15 @@ class Settings:
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
     semantic_search_limit: int = int(os.getenv("SEMANTIC_SEARCH_LIMIT", "20"))
     x402_api_key: str | None = os.getenv("X402_API_KEY")
-    x402_facilitator_url: str = os.getenv("X402_FACILITATOR_URL", "https://api.x402.sepolia.celo.org")
-    x402_network: str = os.getenv("X402_NETWORK", "eip155:11142220")
-    # Celo Sepolia USDC is the safe default for local/testnet work. Production
-    # environments must override this with their explicitly approved asset.
+    x402_facilitator_url: str = os.getenv("X402_FACILITATOR_URL", "https://api.x402.celo.org")
+    x402_network: str = os.getenv("X402_NETWORK", "eip155:42220")
+    # USA₮ on Celo mainnet. Override all x402_* values for local/testnet work.
     x402_asset: str | None = os.getenv(
         "X402_ASSET",
-        "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+        "0xD2ab3C9A02DBBAB236BfEC45D1d755DF4267F771",
     )
-    x402_asset_name: str = os.getenv("X402_ASSET_NAME", "USDC")
-    x402_asset_version: str = os.getenv("X402_ASSET_VERSION", "2")
+    x402_asset_name: str = os.getenv("X402_ASSET_NAME", "Tether America USD")
+    x402_asset_version: str = os.getenv("X402_ASSET_VERSION", "1")
     x402_pay_to: str | None = os.getenv("X402_PAY_TO")
     x402_max_timeout_seconds: int = int(os.getenv("X402_MAX_TIMEOUT_SECONDS", "300"))
     cors_origins: tuple[str, ...] = tuple(
@@ -33,6 +32,7 @@ class Settings:
         for origin in os.getenv("CORS_ORIGINS", "").split(",")
         if origin.strip()
     )
+    auth_secret: str = os.getenv("AUTH_SECRET", "change-this-auth-secret-before-production")
 
 
 settings = Settings()

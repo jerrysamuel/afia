@@ -13,6 +13,10 @@ class Merchant(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=200)
     slug: str = Field(max_length=100, unique=True, index=True)
+    email: str | None = Field(default=None, max_length=320, unique=True, index=True)
+    username: str | None = Field(default=None, max_length=64, unique=True, index=True)
+    password_hash: str | None = Field(default=None, max_length=256)
+    wallet_address: str | None = Field(default=None, max_length=42, unique=True, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
 
 
@@ -22,4 +26,7 @@ class Customer(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=200)
     email: str = Field(max_length=320, unique=True, index=True)
+    username: str | None = Field(default=None, max_length=64, unique=True, index=True)
+    password_hash: str | None = Field(default=None, max_length=256)
+    wallet_address: str | None = Field(default=None, max_length=42, unique=True, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)

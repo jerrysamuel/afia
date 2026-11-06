@@ -12,6 +12,8 @@ class OrderCreate(BaseModel):
     customer_id: int = Field(gt=0)
     store_slug: str = Field(min_length=1, max_length=100)
     items: list[OrderItemCreate] = Field(min_length=1)
+    buyer_email: str | None = Field(default=None, max_length=320)
+    shipping_address: dict[str, object] | None = None
 
 
 class OrderItemRead(BaseModel):
@@ -38,4 +40,6 @@ class OrderRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     items: list[OrderItemRead]
+    buyer_email: str | None = None
+    shipping_address: dict[str, object] | None = None
 

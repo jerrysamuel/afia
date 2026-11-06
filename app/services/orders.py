@@ -51,6 +51,8 @@ def create_order(session: Session, data: OrderCreate) -> Order:
         store_id=store.id,
         total_amount_minor=sum(product.amount_minor * quantity for product, quantity in products),
         currency=currency,
+        buyer_email=data.buyer_email,
+        shipping_address=data.shipping_address,
     )
     session.add(order)
     session.flush()

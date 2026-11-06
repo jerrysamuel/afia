@@ -123,6 +123,13 @@ def get_payment(session: Session, payment_id: int) -> tuple[Payment, list[Paymen
     return payment, attempts
 
 
+def get_payment_for_order(session: Session, order_id: int) -> tuple[Payment, list[PaymentAttempt]]:
+    payment = session.exec(select(Payment).where(Payment.order_id == order_id)).first()
+    if payment is None:
+        raise CatalogNotFoundError("payment not found")
+    return get_payment(session, payment.id)
+
+
 async def process_x402_attempt(
     session: Session,
     attempt_id: int,

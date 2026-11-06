@@ -1,4 +1,4 @@
-"""Explicit ERC-8004 registration command for Celo Sepolia.
+"""Explicit ERC-8004 registration command for Celo mainnet.
 
 Required environment variables:
   ERC8004_RPC_URL
@@ -6,8 +6,8 @@ Required environment variables:
   ERC8004_AGENT_URI
 
 Optional:
-  ERC8004_CHAIN_ID (defaults to Celo Sepolia 11142220)
-  ERC8004_IDENTITY_REGISTRY (defaults to the ERC-8004 testnet singleton)
+  ERC8004_CHAIN_ID (defaults to Celo mainnet 42220)
+  ERC8004_IDENTITY_REGISTRY (defaults to the ERC-8004 mainnet singleton)
 """
 
 import os
@@ -21,10 +21,10 @@ load_dotenv()
 
 
 def main() -> int:
-    chain_id = int(os.getenv("ERC8004_CHAIN_ID", "11142220"))
+    chain_id = int(os.getenv("ERC8004_CHAIN_ID", "42220"))
     registry = os.getenv(
         "ERC8004_IDENTITY_REGISTRY",
-        "0x8004A818BFB912233c491871b3d84c89A494BD9e",
+        "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
     )
     required = {
         "ERC8004_RPC_URL": os.getenv("ERC8004_RPC_URL"),

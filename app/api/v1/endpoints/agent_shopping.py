@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlmodel import Session
 
 from app.api.deps import get_x402_provider
@@ -22,11 +23,70 @@ from app.services.payments import (
     create_payment,
     expire_payment,
     get_payment,
+    get_payment_for_order,
     process_x402_attempt,
     start_attempt,
 )
 
 router = APIRouter(prefix="/api/v1/agent/shopping", tags=["agent-shopping"])
+
+
+@router.get("/orders/{order_id}/payment-required", status_code=status.HTTP_402_PAYMENT_REQUIRED)
+def shopping_payment_required(
+    order_id: int,
+    session: Session = Depends(get_session),
+    provider: X402PaymentProvider = Depends(get_x402_provider),
+):
+    """Issue the server-authoritative x402 challenge for an order."""
+    try:
+        order, _ = get_order(session, order_id)
+        payment = create_payment(session, order.id, "x402")
+        requirements = provider.build_requirements(payment)
+        from x402.schemas import PaymentRequired, ResourceInfo
+        from x402.http import PAYMENT_REQUIRED_HEADER, encode_payment_required_header
+
+        challenge = PaymentRequired(
+            x402_version=2,
+            resource=ResourceInfo(url=f"/api/v1/agent/shopping/orders/{order.id}/fulfill"),
+            accepts=[requirements],
+        )
+        return JSONResponse(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            content=challenge.model_dump(by_alias=True, exclude_none=True),
+            headers={PAYMENT_REQUIRED_HEADER: encode_payment_required_header(challenge)},
+        )
+    except CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/orders/{order_id}/fulfill", response_model=X402AttemptResultRead)
+async def shopping_fulfill_order(
+    order_id: int,
+    payment_signature: str | None = Header(default=None, alias="PAYMENT-SIGNATURE"),
+    session: Session = Depends(get_session),
+    provider: X402PaymentProvider = Depends(get_x402_provider),
+):
+    """Fulfill an order using the standard x402 payment header."""
+    if not payment_signature:
+        return shopping_payment_required(order_id, session, provider)
+    try:
+        payment, attempts = get_payment_for_order(session, order_id)
+        attempt = attempts[-1] if attempts else None
+        if attempt is None:
+            raise PaymentStateError("payment attempt not started")
+        from x402.http import decode_payment_signature_header
+        payload = decode_payment_signature_header(payment_signature)
+        return await shopping_post_x402_attempt(
+            payment.id,
+            attempt.id,
+            X402PayloadSubmit(payload=payload.model_dump(by_alias=True, exclude_none=True)),
+            session,
+            provider,
+        )
+    except (CatalogNotFoundError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PaymentStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.get("/products/search", response_model=list[ProductRead])
@@ -96,6 +156,20 @@ def shopping_get_order(order_id: int, session: Session = Depends(get_session)):
         return OrderRead.model_validate({**order.model_dump(), "items": items})
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/orders/{order_id}/receipt", response_class=PlainTextResponse)
+def shopping_download_receipt(order_id: int, session: Session = Depends(get_session)):
+    try:
+        order, items = get_order(session, order_id)
+    except CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    lines = [f"AFIA RECEIPT — {order.order_number}", f"Status: {order.status} / Payment: {order.payment_status}", f"Date: {order.created_at.isoformat()}", ""]
+    lines.extend(f"{item.quantity} x {item.product_name} — {item.line_total_minor / 100:.2f} {item.currency}" for item in items)
+    lines.extend(["", f"Total: {order.total_amount_minor / 100:.2f} {order.currency}"])
+    if order.shipping_address:
+        lines.extend(["", "Delivery address:", *(f"{key}: {value}" for key, value in order.shipping_address.items())])
+    return PlainTextResponse("\n".join(lines), headers={"Content-Disposition": f'attachment; filename="{order.order_number}-receipt.txt"'})
 
 
 @router.post("/orders/{order_id}/payment", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)

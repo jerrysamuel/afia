@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.models.users import utc_now
@@ -17,6 +17,8 @@ class Order(SQLModel, table=True):
     payment_status: str = Field(default="CREATED", max_length=32, index=True)
     total_amount_minor: int = Field(ge=0)
     currency: str = Field(max_length=12)
+    buyer_email: str | None = Field(default=None, max_length=320)
+    shipping_address: dict[str, object] | None = Field(default=None, sa_column=Column(JSON, nullable=True))
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
 

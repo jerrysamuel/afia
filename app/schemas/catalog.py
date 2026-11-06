@@ -19,6 +19,11 @@ class StoreCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
     description: str | None = Field(default=None, max_length=2000)
+    category: str = Field(default="other", max_length=64)
+    template_id: str = Field(default="default", max_length=100)
+    theme_config: dict[str, object] = Field(default_factory=dict)
+    sections_config: dict[str, object] = Field(default_factory=dict)
+    settings_config: dict[str, object] = Field(default_factory=dict)
 
 
 class StoreRead(StoreCreate):
@@ -35,6 +40,8 @@ class ProductCreate(BaseModel):
     attributes: dict[str, object] = Field(default_factory=dict)
     amount_minor: int = Field(ge=0)
     currency: str = Field(min_length=3, max_length=12)
+    product_type: str = Field(default="physical", pattern=r"^(physical|digital)$")
+    digital_url: str | None = Field(default=None, max_length=2000)
 
     @field_validator("currency")
     @classmethod
