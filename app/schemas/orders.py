@@ -10,7 +10,8 @@ class OrderItemCreate(BaseModel):
 
 class OrderCreate(BaseModel):
     customer_id: int = Field(gt=0)
-    store_slug: str = Field(min_length=1, max_length=100)
+    store_slug: str | None = Field(default=None, min_length=1, max_length=100)
+    store_id: int | None = Field(default=None, gt=0)
     items: list[OrderItemCreate] = Field(min_length=1)
     buyer_email: str | None = Field(default=None, max_length=320)
     shipping_address: dict[str, object] | None = None

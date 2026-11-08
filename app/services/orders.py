@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from app.models.inventory import InventoryItem, InventoryMovement
 from app.models.orders import Order, OrderItem
-from app.models.products import Product
+from app.models.products import Product, Store
 from app.models.users import Customer
 from app.schemas.orders import OrderCreate
 from app.services.catalog import CatalogConflictError, CatalogNotFoundError, get_store_by_slug
@@ -27,14 +27,18 @@ def create_customer(session: Session, name: str, email: str) -> Customer:
 def create_order(session: Session, data: OrderCreate) -> Order:
     if session.get(Customer, data.customer_id) is None:
         raise CatalogNotFoundError("customer not found")
-    store = get_store_by_slug(session, data.store_slug)
+    store = get_store_by_slug(session, data.store_slug) if data.store_slug else None
     if len({item.product_id for item in data.items}) != len(data.items):
         raise CatalogConflictError("each product may appear only once in an order")
 
     products: list[tuple[Product, int]] = []
     for requested in data.items:
         product = session.get(Product, requested.product_id)
-        if product is None or product.store_id != store.id:
+        if product is None:
+            raise CatalogNotFoundError("product not found in store")
+        if store is None:
+            store = session.get(Store, product.store_id)
+        if store is None or product.store_id != store.id:
             raise CatalogNotFoundError("product not found in store")
         inventory = session.exec(select(InventoryItem).where(InventoryItem.product_id == product.id)).first()
         if inventory is None or inventory.available_quantity < requested.quantity:

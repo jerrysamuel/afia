@@ -7,6 +7,7 @@ from app.db.session import get_session
 from app.infrastructure.search.embeddings import EmbeddingProviderError, get_configured_embedding_provider
 from app.infrastructure.x402 import X402PaymentProvider
 from app.schemas.catalog import InventoryRead, ProductRead
+from app.models.products import Store
 from app.schemas.orders import OrderCreate, OrderRead
 from app.schemas.payments import (
     PaymentAttemptCreate,
@@ -29,6 +30,10 @@ from app.services.payments import (
 )
 
 router = APIRouter(prefix="/api/v1/agent/shopping", tags=["agent-shopping"])
+
+def _product_read(session: Session, product) -> ProductRead:
+    store = session.get(Store, product.store_id)
+    return ProductRead.model_validate({**product.model_dump(), "store_slug": store.slug if store else None})
 
 
 @router.get("/orders/{order_id}/payment-required", status_code=status.HTTP_402_PAYMENT_REQUIRED)
@@ -113,10 +118,10 @@ def shopping_search(
                     max_amount_minor=max_amount_minor,
                     available_only=available_only,
                 )
-                return [result.product for result in hybrid_results]
+                return [_product_read(session, result.product) for result in hybrid_results]
             except (EmbeddingProviderError, HybridSearchUnavailableError):
                 pass
-        return search_products(session, query, store_slug, currency, min_amount_minor, max_amount_minor, available_only)
+        return [_product_read(session, product) for product in search_products(session, query, store_slug, currency, min_amount_minor, max_amount_minor, available_only)]
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -124,7 +129,7 @@ def shopping_search(
 @router.get("/products/{product_id}", response_model=ProductRead)
 def shopping_product(product_id: int, session: Session = Depends(get_session)):
     try:
-        return get_product(session, product_id)
+        return _product_read(session, get_product(session, product_id))
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

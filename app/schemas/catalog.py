@@ -60,6 +60,7 @@ class ProductRead(ProductCreate):
     store_id: int
     created_at: datetime
     updated_at: datetime
+    store_slug: str | None = None
 
 
 class InventoryUpdate(BaseModel):
