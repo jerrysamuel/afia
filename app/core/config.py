@@ -10,7 +10,7 @@ load_dotenv()
 @dataclass(frozen=True)
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development")
-    database_url: str = os.getenv("DATABASE_URL")
+    database_url: str | None = os.getenv("DATABASE_URL")
     openai_api_key: str | None = os.getenv("OPENAI_API_KEY")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     embedding_dimensions: int = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
@@ -36,3 +36,21 @@ class Settings:
 
 
 settings = Settings()
+
+
+def validate_production_settings() -> None:
+    """Fail fast instead of starting a partially configured payment service."""
+    if settings.app_env != "production":
+        return
+    required = {
+        "DATABASE_URL": settings.database_url,
+        "CORS_ORIGINS": settings.cors_origins,
+        "AUTH_SECRET": settings.auth_secret,
+        "X402_API_KEY": settings.x402_api_key,
+        "X402_ASSET": settings.x402_asset,
+    }
+    missing = [name for name, value in required.items() if not value or value == "change-this-auth-secret-before-production"]
+    if missing:
+        raise RuntimeError(f"Missing production configuration: {', '.join(missing)}")
+    if settings.x402_network != "eip155:42220":
+        raise RuntimeError("Production x402 network must be Celo mainnet eip155:42220")

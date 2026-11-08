@@ -92,8 +92,8 @@ class X402PaymentProvider:
         self.asset_version = asset_version or settings.x402_asset_version
         if self.network not in {"eip155:42220", "eip155:11142220"}:
             raise X402PaymentProviderError("unsupported Celo x402 network")
-        if not self.asset or not self.pay_to:
-            raise X402PaymentProviderError("X402_ASSET and X402_PAY_TO must be configured")
+        if not self.asset:
+            raise X402PaymentProviderError("X402_ASSET must be configured")
 
     def start_attempt(self, payment: Payment, attempt: PaymentAttempt) -> ProviderAttemptResult:
         """Satisfy the traditional provider boundary without simulating payment."""
@@ -109,12 +109,17 @@ class X402PaymentProvider:
         if payment.amount_minor < 0:
             raise X402PaymentProviderError("payment amount cannot be negative")
         atomic_amount = payment.amount_minor * 10 ** (self.asset_decimals - self.currency_minor_digits)
+        if settings.app_env == "production" and not payment.pay_to:
+            raise X402PaymentProviderError("merchant wallet is required for production payments")
+        pay_to = payment.pay_to or self.pay_to
+        if not pay_to:
+            raise X402PaymentProviderError("merchant wallet is not configured for this payment")
         return PaymentRequirements(
             scheme="exact",
             network=self.network,
             asset=self.asset,
             amount=str(atomic_amount),
-            payTo=self.pay_to,
+            payTo=pay_to,
             maxTimeoutSeconds=self.max_timeout_seconds,
             extra={"name": self.asset_name, "version": self.asset_version},
         )

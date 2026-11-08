@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class MerchantCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     slug: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    wallet_address: str | None = Field(default=None, pattern=r"^0x[a-fA-F0-9]{40}$")
 
 
 class MerchantRead(MerchantCreate):

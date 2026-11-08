@@ -7,6 +7,8 @@ from sqlalchemy import text
 from sqlmodel import Session, select
 
 from app.models.orders import Order
+from app.models.products import Store
+from app.models.users import Merchant
 from app.models.payments import (
     PAYMENT_ATTEMPT_TRANSITIONS,
     PAYMENT_TRANSITIONS,
@@ -43,11 +45,16 @@ def create_payment(session: Session, order_id: int, provider: str) -> Payment:
     order = session.get(Order, order_id)
     if order is None:
         raise CatalogNotFoundError("order not found")
+    store = session.get(Store, order.store_id)
+    merchant = session.get(Merchant, store.merchant_id) if store is not None else None
     payment = Payment(
         order_id=order.id,
         amount_minor=order.total_amount_minor,
         currency=order.currency,
         provider=provider,
+        # Snapshot the merchant wallet. Existing/demo merchants without a
+        # wallet use the configured fallback until their wallet is connected.
+        pay_to=merchant.wallet_address if merchant and merchant.wallet_address else None,
     )
     session.add(payment)
     try:

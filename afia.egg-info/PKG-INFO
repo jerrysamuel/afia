@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: afia
+Version: 0.1.0
+Requires-Python: >=3.14
+License-File: LICENSE
+Requires-Dist: fastapi[standard]>=0.141.1
+Requires-Dist: alembic>=1.16.5
+Requires-Dist: sqlmodel>=0.0.47
+Requires-Dist: openai>=2.0.0
+Requires-Dist: pgvector>=0.4.1
+Requires-Dist: python-dotenv>=1.2.0
+Requires-Dist: psycopg[binary]>=3.2.0
+Requires-Dist: x402[evm,httpx]>=2.0.0
+Dynamic: license-file

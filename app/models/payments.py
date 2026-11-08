@@ -54,6 +54,8 @@ class Payment(SQLModel, table=True):
     currency: str = Field(max_length=12)
     status: PaymentStatus = Field(default=PaymentStatus.CREATED, max_length=32, index=True)
     provider: str = Field(max_length=64)
+    # Snapshot of the merchant destination for this order/payment.
+    pay_to: str | None = Field(default=None, max_length=42, index=True)
     provider_payment_id: str | None = Field(default=None, max_length=255)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)

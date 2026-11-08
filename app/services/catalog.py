@@ -18,7 +18,10 @@ class CatalogNotFoundError(Exception):
 
 
 def create_merchant(session: Session, data: MerchantCreate) -> Merchant:
-    merchant = Merchant.model_validate(data)
+    values = data.model_dump()
+    if values.get("wallet_address"):
+        values["wallet_address"] = values["wallet_address"].lower()
+    merchant = Merchant.model_validate(values)
     session.add(merchant)
     try:
         session.commit()

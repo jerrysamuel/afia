@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
-from app.models.users import Customer
-from app.schemas.auth import AuthResponse, CustomerAccountRead, LoginRequest, SignupRequest, WalletLinkRequest
-from app.services.auth import authenticate, customer_id_from_token, issue_token, link_wallet, signup
+from app.models.users import Customer, Merchant
+from app.schemas.auth import AuthResponse, CustomerAccountRead, LoginRequest, SignupRequest, WalletLinkRequest, MerchantSignupRequest, MerchantAccountRead, MerchantAuthResponse
+from app.services.auth import authenticate, customer_id_from_token, issue_token, link_wallet, signup, merchant_signup, merchant_authenticate, subject_id_from_token, link_merchant_wallet
 from app.services.catalog import CatalogConflictError
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+def _merchant_account(merchant: Merchant) -> MerchantAccountRead:
+    return MerchantAccountRead(id=merchant.id, name=merchant.name, slug=merchant.slug, username=merchant.username or merchant.slug, email=merchant.email or "", wallet_address=merchant.wallet_address)
 
 def _account(customer: Customer) -> CustomerAccountRead:
     return CustomerAccountRead(id=customer.id, username=customer.username or customer.name, email=customer.email, wallet_address=customer.wallet_address)
@@ -46,3 +49,28 @@ def link_wallet_endpoint(data: WalletLinkRequest, authorization: str | None = He
         return _account(link_wallet(session, current_customer(authorization, session), data.wallet_address))
     except CatalogConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+@router.post("/merchant/signup", response_model=MerchantAuthResponse, status_code=status.HTTP_201_CREATED)
+def merchant_signup_endpoint(data: MerchantSignupRequest, session: Session = Depends(get_session)):
+    try:
+        merchant = merchant_signup(session, **data.model_dump())
+    except CatalogConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return MerchantAuthResponse(access_token=issue_token(merchant.id, "merchant"), merchant=_merchant_account(merchant))
+
+@router.post("/merchant/login", response_model=MerchantAuthResponse)
+def merchant_login_endpoint(data: LoginRequest, session: Session = Depends(get_session)):
+    merchant = merchant_authenticate(session, data.login, data.password)
+    if merchant is None:
+        raise HTTPException(status_code=401, detail="invalid login or password")
+    return MerchantAuthResponse(access_token=issue_token(merchant.id, "merchant"), merchant=_merchant_account(merchant))
+
+@router.get("/merchant/me", response_model=MerchantAccountRead)
+def merchant_me_endpoint(authorization: str | None = Header(default=None), session: Session = Depends(get_session)):
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="authentication required")
+    merchant_id = subject_id_from_token(authorization[7:].strip(), "merchant")
+    merchant = session.get(Merchant, merchant_id) if merchant_id else None
+    if merchant is None:
+        raise HTTPException(status_code=401, detail="invalid or expired session")
+    return _merchant_account(merchant)

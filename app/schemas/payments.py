@@ -34,6 +34,7 @@ class PaymentRead(BaseModel):
     currency: str
     status: str
     provider: str
+    pay_to: str | None
     provider_payment_id: str | None
     created_at: datetime
     updated_at: datetime
