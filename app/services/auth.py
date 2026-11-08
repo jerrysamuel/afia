@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.models.products import Store
 from app.models.users import Customer, Merchant
 from app.services.catalog import CatalogConflictError
 
@@ -49,6 +50,24 @@ def subject_id_from_token(token: str, role: str) -> int | None:
     except (ValueError, KeyError, TypeError, json.JSONDecodeError):
         return None
 
+def ensure_merchant_store(session: Session, merchant: Merchant) -> Store:
+    store = session.exec(select(Store).where(Store.merchant_id == merchant.id)).first()
+    if store is not None:
+        return store
+    store = Store(
+        merchant_id=merchant.id,
+        name=merchant.name,
+        slug=merchant.slug,
+        description=f"{merchant.name} storefront",
+        category="other",
+        template_id="default",
+        settings_config={"currency": "USAT"},
+    )
+    session.add(store)
+    session.commit()
+    session.refresh(store)
+    return store
+
 def merchant_signup(session: Session, name: str, slug: str, email: str, username: str, password: str, wallet_address: str) -> Merchant:
     merchant = Merchant(name=name, slug=slug.lower(), email=email.lower(), username=username.lower(), password_hash=hash_password(password), wallet_address=wallet_address.lower())
     session.add(merchant)
@@ -58,12 +77,14 @@ def merchant_signup(session: Session, name: str, slug: str, email: str, username
         session.rollback()
         raise CatalogConflictError("merchant slug, username, email, or wallet already exists") from exc
     session.refresh(merchant)
+    ensure_merchant_store(session, merchant)
     return merchant
 
 def merchant_authenticate(session: Session, login: str, password: str) -> Merchant | None:
     merchant = session.exec(select(Merchant).where((Merchant.username == login.lower()) | (Merchant.email == login.lower()))).first()
     if merchant is None or not merchant.password_hash or not verify_password(password, merchant.password_hash):
         return None
+    ensure_merchant_store(session, merchant)
     return merchant
 
 def link_merchant_wallet(session: Session, merchant: Merchant, wallet_address: str) -> Merchant:

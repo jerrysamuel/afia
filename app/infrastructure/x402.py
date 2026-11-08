@@ -104,8 +104,8 @@ class X402PaymentProvider:
     def build_requirements(self, payment: Payment):
         from x402.schemas import PaymentRequirements
 
-        if payment.currency.upper() != "USD":
-            raise X402PaymentProviderError("Celo x402 adapter currently requires USD orders")
+        if payment.currency.upper() not in {"USD", "USAT"}:
+            raise X402PaymentProviderError("Celo x402 adapter requires USD or USAT orders")
         if payment.amount_minor < 0:
             raise X402PaymentProviderError("payment amount cannot be negative")
         atomic_amount = payment.amount_minor * 10 ** (self.asset_decimals - self.currency_minor_digits)
