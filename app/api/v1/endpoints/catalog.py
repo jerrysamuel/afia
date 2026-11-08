@@ -1,7 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlmodel import Session
+from sqlmodel import select
 
 from app.db.session import get_session
+from app.models.products import Store
+from app.models.users import Merchant
 from app.schemas.catalog import (
     InventoryRead,
     InventoryUpdate,
@@ -23,8 +26,58 @@ from app.services.catalog import (
     search_products,
     update_inventory,
 )
+from app.services.auth import subject_id_from_token
 
 router = APIRouter(prefix="/api/v1", tags=["catalog"])
+
+
+def _current_merchant(authorization: str | None, session: Session) -> Merchant:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="merchant authentication required")
+    merchant_id = subject_id_from_token(authorization[7:].strip(), "merchant")
+    merchant = session.get(Merchant, merchant_id) if merchant_id else None
+    if merchant is None:
+        raise HTTPException(status_code=401, detail="invalid merchant session")
+    return merchant
+
+
+def _merchant_store(session: Session, merchant: Merchant) -> Store:
+    store = session.exec(select(Store).where(Store.merchant_id == merchant.id)).first()
+    if store is None:
+        store = Store(merchant_id=merchant.id, name=merchant.name, slug=merchant.slug, description=f"{merchant.name} storefront", settings_config={"currency": "USAT"})
+        session.add(store)
+        session.commit()
+        session.refresh(store)
+    return store
+
+
+@router.get("/merchant/store", response_model=StoreRead)
+def get_merchant_store(authorization: str | None = Header(default=None), session: Session = Depends(get_session)):
+    return _merchant_store(session, _current_merchant(authorization, session))
+
+
+@router.post("/merchant/store/products", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
+def post_merchant_product(
+    data: ProductCreate,
+    inventory: int = Query(default=0, ge=0),
+    authorization: str | None = Header(default=None),
+    session: Session = Depends(get_session),
+):
+    merchant = _current_merchant(authorization, session)
+    store = _merchant_store(session, merchant)
+    try:
+        product = create_product(session, store.slug, data)
+        update_inventory(session, product.id, InventoryUpdate(available_quantity=inventory))
+        return product
+    except CatalogConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CatalogNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+@router.get("/merchant/store/products", response_model=list[ProductRead])
+def get_merchant_products(authorization: str | None = Header(default=None), session: Session = Depends(get_session)):
+    merchant = _current_merchant(authorization, session)
+    return list_products(session, _merchant_store(session, merchant).slug)
 
 
 @router.post("/merchants", response_model=MerchantRead, status_code=status.HTTP_201_CREATED)

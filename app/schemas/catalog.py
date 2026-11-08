@@ -43,6 +43,7 @@ class ProductCreate(BaseModel):
     currency: str = Field(min_length=3, max_length=12)
     product_type: str = Field(default="physical", pattern=r"^(physical|digital)$")
     digital_url: str | None = Field(default=None, max_length=2000)
+    published: bool = True
 
     @field_validator("currency")
     @classmethod

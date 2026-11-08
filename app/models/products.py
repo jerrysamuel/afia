@@ -37,5 +37,6 @@ class Product(SQLModel, table=True):
     currency: str = Field(max_length=12)
     product_type: str = Field(default="physical", max_length=16)
     digital_url: str | None = Field(default=None, max_length=2000)
+    published: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=utc_now, nullable=False)
     updated_at: datetime = Field(default_factory=utc_now, nullable=False)
