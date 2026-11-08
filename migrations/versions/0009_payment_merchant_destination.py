@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0009_payment_merchant_destination"
+revision = "0009_merchant_payto"
 down_revision = "0008_store_commerce_fields"
 branch_labels = None
 depends_on = None
