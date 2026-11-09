@@ -19,7 +19,7 @@ Required environment variables:
 ```env
 APP_ENV=production
 DATABASE_URL=postgresql+psycopg://...
-CORS_ORIGINS=https://your-frontend-domain.example
+CORS_ORIGINS=https://afia-frontend-z2uy.onrender.com
 AUTH_SECRET=<long-random-secret>
 X402_API_KEY=<live-key-from-x402.celo.org>
 X402_FACILITATOR_URL=https://api.x402.celo.org

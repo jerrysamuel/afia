@@ -50,7 +50,6 @@ def validate_production_settings() -> None:
         "AUTH_SECRET": settings.auth_secret,
         "X402_API_KEY": settings.x402_api_key,
         "X402_ASSET": settings.x402_asset,
-        "X402_BUILDER_CODE": settings.x402_builder_code,
     }
     missing = [name for name, value in required.items() if not value or value == "change-this-auth-secret-before-production"]
     if missing:
