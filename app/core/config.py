@@ -27,6 +27,8 @@ class Settings:
     x402_asset_version: str = os.getenv("X402_ASSET_VERSION", "1")
     x402_pay_to: str | None = os.getenv("X402_PAY_TO")
     x402_max_timeout_seconds: int = int(os.getenv("X402_MAX_TIMEOUT_SECONDS", "300"))
+    # Celo/competition builder code echoed in x402 PaymentPayload extensions.
+    x402_builder_code: str | None = os.getenv("X402_BUILDER_CODE")
     cors_origins: tuple[str, ...] = tuple(
         origin.strip()
         for origin in os.getenv("CORS_ORIGINS", "").split(",")
@@ -48,6 +50,7 @@ def validate_production_settings() -> None:
         "AUTH_SECRET": settings.auth_secret,
         "X402_API_KEY": settings.x402_api_key,
         "X402_ASSET": settings.x402_asset,
+        "X402_BUILDER_CODE": settings.x402_builder_code,
     }
     missing = [name for name, value in required.items() if not value or value == "change-this-auth-secret-before-production"]
     if missing:

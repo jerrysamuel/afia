@@ -124,6 +124,14 @@ class X402PaymentProvider:
             extra={"name": self.asset_name, "version": self.asset_version},
         )
 
+    def builder_code_extension(self) -> dict[str, Any] | None:
+        """Declare Afia's attribution code on every x402 challenge."""
+        if not settings.x402_builder_code:
+            return None
+        from x402.extensions.builder_code import declare_builder_code_extension
+
+        return declare_builder_code_extension(settings.x402_builder_code)
+
     def _parse_payload(self, raw_payload: dict[str, Any]):
         from x402.schemas import PaymentPayload
 

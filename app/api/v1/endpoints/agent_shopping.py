@@ -50,10 +50,12 @@ def shopping_payment_required(
         from x402.schemas import PaymentRequired, ResourceInfo
         from x402.http import PAYMENT_REQUIRED_HEADER, encode_payment_required_header
 
+        builder_code = provider.builder_code_extension()
         challenge = PaymentRequired(
             x402_version=2,
             resource=ResourceInfo(url=f"/api/v1/agent/shopping/orders/{order.id}/fulfill"),
             accepts=[requirements],
+            extensions={"builder-code": builder_code} if builder_code else None,
         )
         return JSONResponse(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
