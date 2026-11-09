@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 from app.db.session import get_session
+from app.api.deps import get_current_customer
+from app.models.users import Customer
 from app.schemas.carts import CartItemUpsert, CartRead
 from app.schemas.orders import OrderRead
 from app.services.catalog import CatalogConflictError, CatalogNotFoundError
@@ -16,7 +18,9 @@ def _read_cart(cart, items):
 
 
 @router.get("/customers/{customer_id}/stores/{store_slug}/cart", response_model=CartRead)
-def get_cart_endpoint(customer_id: int, store_slug: str, session: Session = Depends(get_session)):
+def get_cart_endpoint(customer_id: int, store_slug: str, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
+    if isinstance(customer, Customer) and customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="cart not found")
     try:
         cart, items = get_cart(session, customer_id, store_slug)
         return _read_cart(cart, items)
@@ -25,7 +29,9 @@ def get_cart_endpoint(customer_id: int, store_slug: str, session: Session = Depe
 
 
 @router.put("/customers/{customer_id}/stores/{store_slug}/cart/items", response_model=CartRead)
-def put_cart_item(customer_id: int, store_slug: str, data: CartItemUpsert, session: Session = Depends(get_session)):
+def put_cart_item(customer_id: int, store_slug: str, data: CartItemUpsert, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
+    if isinstance(customer, Customer) and customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="cart not found")
     try:
         cart, items = upsert_cart_item(session, customer_id, store_slug, data)
         return _read_cart(cart, items)
@@ -34,7 +40,9 @@ def put_cart_item(customer_id: int, store_slug: str, data: CartItemUpsert, sessi
 
 
 @router.delete("/customers/{customer_id}/stores/{store_slug}/cart/items/{product_id}", response_model=CartRead)
-def delete_cart_item(customer_id: int, store_slug: str, product_id: int, session: Session = Depends(get_session)):
+def delete_cart_item(customer_id: int, store_slug: str, product_id: int, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
+    if isinstance(customer, Customer) and customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="cart not found")
     try:
         cart, items = remove_cart_item(session, customer_id, store_slug, product_id)
         return _read_cart(cart, items)
@@ -43,7 +51,9 @@ def delete_cart_item(customer_id: int, store_slug: str, product_id: int, session
 
 
 @router.post("/customers/{customer_id}/stores/{store_slug}/cart/checkout", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
-def checkout_cart_endpoint(customer_id: int, store_slug: str, session: Session = Depends(get_session)):
+def checkout_cart_endpoint(customer_id: int, store_slug: str, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
+    if isinstance(customer, Customer) and customer_id != customer.id:
+        raise HTTPException(status_code=404, detail="cart not found")
     try:
         order = checkout_cart(session, customer_id, store_slug)
         _, items = get_order(session, order.id)

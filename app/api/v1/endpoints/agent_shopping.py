@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlmodel import Session
 
-from app.api.deps import get_x402_provider
+from app.api.deps import get_current_customer, get_x402_provider
 from app.db.session import get_session
 from app.infrastructure.search.embeddings import EmbeddingProviderError, get_configured_embedding_provider
 from app.infrastructure.x402 import X402PaymentProvider
 from app.schemas.catalog import InventoryRead, ProductRead
 from app.models.products import Store
+from app.models.users import Customer
 from app.schemas.orders import OrderCreate, OrderRead
 from app.schemas.payments import (
     PaymentAttemptCreate,
@@ -41,10 +42,13 @@ def shopping_payment_required(
     order_id: int,
     session: Session = Depends(get_session),
     provider: X402PaymentProvider = Depends(get_x402_provider),
+    customer: Customer = Depends(get_current_customer),
 ):
     """Issue the server-authoritative x402 challenge for an order."""
     try:
         order, _ = get_order(session, order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="order not found")
         payment = create_payment(session, order.id, "x402")
         requirements = provider.build_requirements(payment)
         from x402.schemas import PaymentRequired, ResourceInfo
@@ -72,12 +76,16 @@ async def shopping_fulfill_order(
     payment_signature: str | None = Header(default=None, alias="PAYMENT-SIGNATURE"),
     session: Session = Depends(get_session),
     provider: X402PaymentProvider = Depends(get_x402_provider),
+    customer: Customer = Depends(get_current_customer),
 ):
     """Fulfill an order using the standard x402 payment header."""
     if not payment_signature:
-        return shopping_payment_required(order_id, session, provider)
+        return shopping_payment_required(order_id, session, provider, customer)
     try:
         payment, attempts = get_payment_for_order(session, order_id)
+        order, _ = get_order(session, order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="order not found")
         attempt = attempts[-1] if attempts else None
         if attempt is None:
             raise PaymentStateError("payment attempt not started")
@@ -145,9 +153,10 @@ def shopping_availability(product_id: int, session: Session = Depends(get_sessio
 
 
 @router.post("/orders", response_model=OrderRead, status_code=status.HTTP_201_CREATED)
-def shopping_create_order(data: OrderCreate, session: Session = Depends(get_session)):
+def shopping_create_order(data: OrderCreate, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
-        order = create_order(session, data)
+        owner_id = customer.id if isinstance(customer, Customer) else data.customer_id
+        order = create_order(session, data.model_copy(update={"customer_id": owner_id}))
         _, items = get_order(session, order.id)
         return OrderRead.model_validate({**order.model_dump(), "items": items})
     except CatalogNotFoundError as exc:
@@ -157,18 +166,22 @@ def shopping_create_order(data: OrderCreate, session: Session = Depends(get_sess
 
 
 @router.get("/orders/{order_id}", response_model=OrderRead)
-def shopping_get_order(order_id: int, session: Session = Depends(get_session)):
+def shopping_get_order(order_id: int, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
         order, items = get_order(session, order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="order not found")
         return OrderRead.model_validate({**order.model_dump(), "items": items})
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/orders/{order_id}/receipt", response_class=PlainTextResponse)
-def shopping_download_receipt(order_id: int, session: Session = Depends(get_session)):
+def shopping_download_receipt(order_id: int, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
         order, items = get_order(session, order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="order not found")
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     lines = [f"AFIA RECEIPT — {order.order_number}", f"Status: {order.status} / Payment: {order.payment_status}", f"Date: {order.created_at.isoformat()}", ""]
@@ -180,8 +193,11 @@ def shopping_download_receipt(order_id: int, session: Session = Depends(get_sess
 
 
 @router.post("/orders/{order_id}/payment", response_model=PaymentRead, status_code=status.HTTP_201_CREATED)
-def shopping_create_payment(order_id: int, data: PaymentCreate, session: Session = Depends(get_session)):
+def shopping_create_payment(order_id: int, data: PaymentCreate, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
+        order, _ = get_order(session, order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="order not found")
         payment = create_payment(session, order_id, data.provider)
         payment_record, attempts = get_payment(session, payment.id)
         return PaymentRead.model_validate({**payment_record.model_dump(), "attempts": attempts})
@@ -196,8 +212,13 @@ def shopping_create_payment_attempt(
     payment_id: int,
     data: PaymentAttemptCreate,
     session: Session = Depends(get_session),
+    customer: Customer = Depends(get_current_customer),
 ):
     try:
+        payment, _ = get_payment(session, payment_id)
+        order, _ = get_order(session, payment.order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="payment not found")
         start_attempt(session, payment_id, data.provider)
         payment, attempts = get_payment(session, payment_id)
         return PaymentRead.model_validate({**payment.model_dump(), "attempts": attempts})
@@ -208,17 +229,24 @@ def shopping_create_payment_attempt(
 
 
 @router.get("/payments/{payment_id}", response_model=PaymentRead)
-def shopping_get_payment(payment_id: int, session: Session = Depends(get_session)):
+def shopping_get_payment(payment_id: int, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
         payment, attempts = get_payment(session, payment_id)
+        order, _ = get_order(session, payment.order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="payment not found")
         return PaymentRead.model_validate({**payment.model_dump(), "attempts": attempts})
     except CatalogNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/payments/{payment_id}/expire", response_model=PaymentRead)
-def shopping_expire_payment(payment_id: int, session: Session = Depends(get_session)):
+def shopping_expire_payment(payment_id: int, session: Session = Depends(get_session), customer: Customer = Depends(get_current_customer)):
     try:
+        payment, _ = get_payment(session, payment_id)
+        order, _ = get_order(session, payment.order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="payment not found")
         expire_payment(session, payment_id)
         payment, attempts = get_payment(session, payment_id)
         return PaymentRead.model_validate({**payment.model_dump(), "attempts": attempts})
@@ -240,6 +268,7 @@ async def shopping_post_x402_attempt(
     body: X402PayloadSubmit,
     session: Session = Depends(get_session),
     provider: X402PaymentProvider = Depends(get_x402_provider),
+    customer: Customer = Depends(get_current_customer),
 ):
     """Verify and settle one x402 payment attempt on Celo (agent shopping path).
 
@@ -253,6 +282,10 @@ async def shopping_post_x402_attempt(
     - Order: PENDING_PAYMENT/CREATED → CONFIRMED/SETTLED
     """
     try:
+        payment, _ = get_payment(session, payment_id)
+        order, _ = get_order(session, payment.order_id)
+        if isinstance(customer, Customer) and order.customer_id != customer.id:
+            raise HTTPException(status_code=404, detail="payment not found")
         result = await process_x402_attempt(
             session, attempt_id, body.payload, provider, payment_id=payment_id
         )
